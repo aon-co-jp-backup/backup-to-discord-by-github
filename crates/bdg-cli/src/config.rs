@@ -214,8 +214,8 @@ impl Config {
 /// 秘密のファイルを読む。前後の空白・改行は取り除く。
 /// エラーに中身は含めない。
 pub fn read_secret(path: &Path, what: &str) -> Result<String, String> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| format!("cannot read {what} file {}: {e}", path.display()))?;
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read {what} file {}: {e}", path.display()))?;
+    let text = decode_text(&bytes).ok_or_else(|| format!("{what} file {} is not valid text", path.display()))?;
     let s = text.trim().to_string();
     if s.is_empty() {
         return Err(format!("{what} file {} is empty", path.display()));
@@ -223,9 +223,45 @@ pub fn read_secret(path: &Path, what: &str) -> Result<String, String> {
     Ok(s)
 }
 
+/// UTF-8(BOMあり/なし)とUTF-16(BOMあり)を受け付ける。Windowsのメモ帳は
+/// 保存の文字コードによってUTF-16になるため。
+fn decode_text(bytes: &[u8]) -> Option<String> {
+    match bytes {
+        [0xFF, 0xFE, rest @ ..] | [0xFE, 0xFF, rest @ ..] => {
+            let le = bytes[0] == 0xFF;
+            if rest.len() % 2 != 0 {
+                return None;
+            }
+            let units: Vec<u16> = rest
+                .chunks_exact(2)
+                .map(|c| if le { u16::from_le_bytes([c[0], c[1]]) } else { u16::from_be_bytes([c[0], c[1]]) })
+                .collect();
+            String::from_utf16(&units).ok()
+        }
+        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8(rest.to_vec()).ok(),
+        _ => String::from_utf8(bytes.to_vec()).ok(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn secret_files_in_utf16_and_utf8_bom_are_read() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.txt");
+        let mut utf16 = vec![0xFF, 0xFE];
+        for u in "tok.en-1\r\n".encode_utf16() {
+            utf16.extend_from_slice(&u.to_le_bytes());
+        }
+        std::fs::write(&p, &utf16).unwrap();
+        assert_eq!(read_secret(&p, "x").unwrap(), "tok.en-1");
+        std::fs::write(&p, b"\xEF\xBB\xBFtok.en-2\n").unwrap();
+        assert_eq!(read_secret(&p, "x").unwrap(), "tok.en-2");
+        std::fs::write(&p, [0xFF, 0x00, 0x80]).unwrap();
+        assert!(read_secret(&p, "x").is_err());
+    }
 
     fn parse(s: &str) -> Result<Config, String> {
         let c: Config = toml::from_str(s).map_err(|e| e.to_string())?;
