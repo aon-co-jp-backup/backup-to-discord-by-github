@@ -1,0 +1,24 @@
+[package]
+name = "bdg-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "GitHubリポジトリのgit bundleを暗号化・分割して非公開のDiscordサーバーへ保存/復元するコア(フレームワーク非依存)"
+
+[dependencies]
+chacha20poly1305 = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "sync", "macros", "process", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+bytes = "1"
+
+[dev-dependencies]
+tempfile = "3"
+open-runo-router = { path = "../../../RPoem/crates/open-runo-router" }
+hyper = "1"
