@@ -177,6 +177,68 @@ pub async fn read_manifest(discord: &DiscordClient, key_source: &KeySource, r: &
     Ok(manifest)
 }
 
+/// 1つのバックアップを削除する。パート → マニフェストの順に消すので、
+/// 途中で失敗してもマニフェストが残り、あとで再実行して続きを消せる。
+pub async fn delete_backup(discord: &DiscordClient, manifest: &Manifest, r: &BackupRef) -> Result<()> {
+    for p in &manifest.parts {
+        discord.delete_message(&p.message_id).await?;
+    }
+    discord.delete_message(&r.manifest_message_id).await
+}
+
+#[derive(Debug, Default)]
+pub struct PruneReport {
+    /// 残したバックアップ `(repo, id8)`。
+    pub kept: Vec<(String, String)>,
+    /// 削除した(`dry_run` なら削除対象の)バックアップ。
+    pub deleted: Vec<(String, String)>,
+    /// 鍵が合わず読めなかったマニフェストの数。**削除しない**
+    /// (別の鍵・別の用途のバックアップかもしれないため)。
+    pub unreadable: usize,
+}
+
+/// リポジトリごとに新しい順に `keep` 件だけ残して古いものを削除する。
+/// `keep` は1以上。読めないマニフェストには手を付けない。
+pub async fn prune(
+    discord: &DiscordClient,
+    key_source: &KeySource,
+    keep: usize,
+    repo_filter: Option<&str>,
+    dry_run: bool,
+) -> Result<PruneReport> {
+    if keep == 0 {
+        return Err(Error::Config("keep must be at least 1".into()));
+    }
+    let mut report = PruneReport::default();
+    let mut by_repo: std::collections::BTreeMap<String, Vec<(Manifest, BackupRef)>> = Default::default();
+    for r in list_backups(discord).await? {
+        match read_manifest(discord, key_source, &r).await {
+            Ok(m) => {
+                if repo_filter.is_none_or(|f| f == m.repo) {
+                    by_repo.entry(m.repo.clone()).or_default().push((m, r));
+                }
+            }
+            Err(Error::Decrypt(_)) | Err(Error::Format(_)) => report.unreadable += 1,
+            Err(e) => return Err(e),
+        }
+    }
+    for (repo, mut list) in by_repo {
+        list.sort_by_key(|(m, _)| std::cmp::Reverse(m.created_at));
+        for (i, (m, r)) in list.into_iter().enumerate() {
+            let entry = (repo.clone(), r.id8.clone());
+            if i < keep {
+                report.kept.push(entry);
+            } else {
+                if !dry_run {
+                    delete_backup(discord, &m, &r).await?;
+                }
+                report.deleted.push(entry);
+            }
+        }
+    }
+    Ok(report)
+}
+
 /// 復元する。平文(git bundle)を `out` へ順に書く。検証にすべて通るまで
 /// 「成功」を返さない: SHA-256・サイズ・連番・最終パート・合計バイト数。
 pub async fn restore<W: Write>(

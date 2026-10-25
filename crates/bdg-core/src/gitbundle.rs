@@ -102,6 +102,35 @@ pub fn open_bundle(source: &GitSource, workdir: &Path) -> Result<BundleReader> {
     Ok(BundleReader { child, stdout, finished: false, _dir: Some(mirror) })
 }
 
+/// リモートの全参照(`git ls-remote`)のSHA-256。前回と同じなら中身は
+/// 変わっていないので、バックアップを省ける。空のリポジトリは `None`。
+pub fn remote_fingerprint(source: &GitSource) -> Result<Option<String>> {
+    use sha2::{Digest, Sha256};
+    if source.url.starts_with('-') || source.url.is_empty() {
+        return Err(Error::Config("invalid repository url".into()));
+    }
+    let out = git(source)
+        .args(["ls-remote", "--"])
+        .arg(&source.url)
+        .output()
+        .map_err(|e| Error::Git(format!("cannot run git: {e}")))?;
+    if !out.status.success() {
+        let msg = String::from_utf8_lossy(&out.stderr);
+        return Err(Error::Git(format!("git ls-remote failed: {}", redact(&msg, source))));
+    }
+    if out.stdout.iter().all(|b| b.is_ascii_whitespace()) {
+        return Ok(None); // 空のリポジトリ(参照が1つも無い)
+    }
+    let mut lines: Vec<&[u8]> = out.stdout.split(|&b| b == b'\n').collect();
+    lines.sort();
+    let mut h = Sha256::new();
+    for l in lines {
+        h.update(l);
+        h.update(b"\n");
+    }
+    Ok(Some(hex::encode(h.finalize())))
+}
+
 fn redact(text: &str, source: &GitSource) -> String {
     let mut s: String = text.chars().take(300).collect();
     if let Some(t) = &source.token {

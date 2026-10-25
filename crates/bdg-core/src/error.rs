@@ -34,6 +34,14 @@ impl fmt::Display for Error {
     }
 }
 
+impl Error {
+    /// Discord以外のHTTP APIの失敗(GitHubなど)。
+    #[allow(non_snake_case)]
+    pub fn Http_status(service: &str, status: u16, body: String) -> Self {
+        Error::Discord { status, message: format!("{service}: {body}") }
+    }
+}
+
 impl std::error::Error for Error {}
 
 impl From<std::io::Error> for Error {

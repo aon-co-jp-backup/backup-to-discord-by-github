@@ -1,0 +1,15 @@
+[Unit]
+Description=Back up GitHub repositories to a private Discord server (encrypted)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 専用ユーザーで動かし、設定と秘密ファイルは0600にする。
+User=bdg
+ExecStart=/usr/local/bin/bdg --config /etc/bdg/bdg.toml run --once
+# 秘密ファイルを読むだけで、ほかには書かない。
+ProtectSystem=strict
+ReadWritePaths=/var/lib/bdg
+PrivateTmp=true
+NoNewPrivileges=true

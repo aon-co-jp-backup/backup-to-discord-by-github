@@ -1,0 +1,27 @@
+# bdg の設定例。コピーして bdg.toml にする。
+# 秘密(トークン・パスフレーズ)はここに書かず、ファイルのパスで指す。
+# Windowsのパスは '...'(シングルクォート)か / 区切りで書く。
+
+[discord]
+channel_id = "123456789012345678"          # 非公開サーバーのバックアップ用チャンネルのID
+token_file = 'F:/discord-bot-token.txt'    # Botトークン(1行)
+max_upload_mib = 8                         # 添付1個の上限。サーバーの上限より小さく
+
+[crypto]
+passphrase_file = 'F:/bdg-passphrase.txt'  # 暗号化パスフレーズ(1行)。無くすと復元できない。別の場所にも保管すること
+kdf_memory_mib = 64
+
+[github]
+token_file = 'F:/github-token.txt'         # 非公開リポジトリの取得と一覧に使うPAT
+orgs = ["aon-co-jp"]                       # 組織の全リポジトリ(公開・非公開)
+include_user = false                       # トークンの持ち主自身のリポジトリも
+include_forks = false
+include_archived = true
+repos = []                                 # 追加で明示する場合: "owner/name"
+
+[schedule]
+interval_hours = 24     # `bdg run`(常駐)の間隔。OSのスケジューラなら `bdg run --once`
+keep = 3                # リポジトリごとの世代数
+pause_secs = 5
+only_if_changed = true  # 参照が前回と同じなら送らない
+state_file = "bdg-state.json"

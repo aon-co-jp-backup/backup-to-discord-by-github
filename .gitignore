@@ -1,3 +1,5 @@
 target/
 *.bundle
 .env
+bdg.toml
+bdg-state.json

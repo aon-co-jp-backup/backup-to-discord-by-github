@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily encrypted GitHub backup to Discord
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15min
+# 停止中に時刻を過ぎた場合は、起動後に実行する。
+Persistent=true
+
+[Install]
+WantedBy=timers.target

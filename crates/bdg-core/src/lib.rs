@@ -18,6 +18,7 @@ pub mod backup;
 pub mod crypto;
 pub mod discord;
 pub mod error;
+pub mod github;
 pub mod gitbundle;
 pub mod manifest;
 pub mod split;

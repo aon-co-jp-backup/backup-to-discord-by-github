@@ -20,5 +20,4 @@ bytes = "1"
 
 [dev-dependencies]
 tempfile = "3"
-open-runo-router = { path = "../../../RPoem/crates/open-runo-router" }
-hyper = "1"
+bdg-testkit = { path = "../bdg-testkit" }

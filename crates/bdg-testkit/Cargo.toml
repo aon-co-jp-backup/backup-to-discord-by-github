@@ -1,0 +1,13 @@
+[package]
+name = "bdg-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "bdg用のモックDiscord/GitHub(テスト専用)"
+
+[dependencies]
+open-runo-router = { path = "../../../RPoem/crates/open-runo-router" }
+hyper = "1"
+bytes = "1"
+serde_json = "1"
