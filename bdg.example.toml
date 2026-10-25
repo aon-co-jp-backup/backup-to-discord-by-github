@@ -25,3 +25,12 @@ keep = 3                # リポジトリごとの世代数
 pause_secs = 5
 only_if_changed = true  # 参照が前回と同じなら送らない
 state_file = "bdg-state.json"
+
+# bdg-server(管理APIとGitHub Webhook受信)を使う場合のみ。
+[server]
+listen = "127.0.0.1:8787"                        # TLSは持たない。公開するならnginx等の背後に置く
+admin_token_file = 'F:/bdg-admin-token.txt'      # 24文字以上のランダム文字列(1行)
+webhook_secret_file = 'F:/bdg-webhook-secret.txt' # GitHub Webhookの "Secret"(1行)。無ければWebhook無効
+webhook_delay_secs = 60                          # push後この秒数待ち、連続pushは1回にまとめる
+run_schedule = true                              # サーバー自身が interval_hours ごとに全体を実行
+api_rate_per_min = 120

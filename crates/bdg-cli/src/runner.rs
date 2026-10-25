@@ -247,10 +247,10 @@ pub async fn doctor(ctx: &Ctx) -> Vec<(String, bool, String)> {
                     }
                     match read_manifest(&ctx.discord, &ctx.key, &r).await {
                         Ok(mf) => match delete_backup(&ctx.discord, &mf, &r).await {
-                            Ok(()) => add("削除(メッセージの管理権限)", true, "試験データを削除".into()),
-                            Err(e) => add("削除(メッセージの管理権限)", false, with_hint(&e.to_string())),
+                            Ok(()) => add("削除(自分の投稿の削除)", true, "試験データを削除".into()),
+                            Err(e) => add("削除(自分の投稿の削除)", false, with_hint(&e.to_string())),
                         },
-                        Err(e) => add("削除(メッセージの管理権限)", false, e.to_string()),
+                        Err(e) => add("削除(自分の投稿の削除)", false, e.to_string()),
                     }
                 }
                 Ok(None) => add("履歴の読み取り(メッセージ履歴を読む権限)", false, "送ったメッセージが一覧に出ない".into()),
@@ -278,7 +278,7 @@ fn with_hint(msg: &str) -> String {
     let hint = if msg.contains(" 401") {
         "Botトークンが違う/無効"
     } else if msg.contains(" 403") {
-        "Botにこのチャンネルの権限が無い(メッセージ送信・ファイル添付・履歴閲覧・メッセージ管理)"
+        "Botにこのチャンネルの権限が無い(メッセージ送信・ファイル添付・履歴閲覧)"
     } else if msg.contains(" 404") {
         "チャンネルIDが違う、またはBotがそのチャンネルを見られない"
     } else {

@@ -1,0 +1,37 @@
+[package]
+name = "bdg-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "bdgの管理APIとGitHub Webhook受信(RPoem)"
+
+[lib]
+name = "bdg_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bdg-server"
+path = "src/main.rs"
+
+[dependencies]
+bdg-core = { path = "../bdg-core" }
+bdg-cli = { path = "../bdg-cli" }
+open-runo-router = { path = "../../../RPoem/crates/open-runo-router" }
+open-runo-security = { path = "../../../RPoem/crates/open-runo-security" }
+hyper = "1"
+bytes = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+bdg-testkit = { path = "../bdg-testkit" }
+tempfile = "3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+hmac = "0.12"
+hex = "0.4"

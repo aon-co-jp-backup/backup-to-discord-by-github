@@ -1,0 +1,17 @@
+[Unit]
+Description=bdg-server (admin API + GitHub webhook receiver)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=bdg
+ExecStart=/usr/local/bin/bdg-server --config /etc/bdg/bdg.toml
+Restart=on-failure
+RestartSec=10
+ProtectSystem=strict
+ReadWritePaths=/var/lib/bdg
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

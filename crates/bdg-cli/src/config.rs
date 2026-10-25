@@ -15,6 +15,55 @@ pub struct Config {
     pub github: GithubCfg,
     #[serde(default)]
     pub schedule: ScheduleCfg,
+    /// `bdg-server`(管理APIとWebhook受信)用。CLIだけなら不要。
+    #[serde(default)]
+    pub server: ServerCfg,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServerCfg {
+    /// 待ち受けアドレス。TLSは持たないので、既定はループバックのみ
+    /// (公開する場合はnginx等のリバースプロキシの背後に置く)。
+    #[serde(default = "default_listen")]
+    pub listen: String,
+    /// 管理APIの Bearer トークン(1行のtxt)。`bdg-server` には必須。
+    pub admin_token_file: Option<PathBuf>,
+    /// GitHub Webhook の秘密(1行のtxt)。無ければ Webhook 受信は無効。
+    pub webhook_secret_file: Option<PathBuf>,
+    /// Webhook を受けてからバックアップを始めるまでの待ち(秒)。
+    /// 連続pushは1回にまとめる。
+    #[serde(default = "default_webhook_delay")]
+    pub webhook_delay_secs: u64,
+    /// サーバー自身が `schedule.interval_hours` ごとに全体を実行する。
+    #[serde(default = "yes")]
+    pub run_schedule: bool,
+    /// 管理APIの1分あたりの上限(クライアント単位)。
+    #[serde(default = "default_api_rate")]
+    pub api_rate_per_min: u32,
+}
+
+impl Default for ServerCfg {
+    fn default() -> Self {
+        Self {
+            listen: default_listen(),
+            admin_token_file: None,
+            webhook_secret_file: None,
+            webhook_delay_secs: default_webhook_delay(),
+            run_schedule: true,
+            api_rate_per_min: default_api_rate(),
+        }
+    }
+}
+
+fn default_listen() -> String {
+    "127.0.0.1:8787".to_string()
+}
+fn default_webhook_delay() -> u64 {
+    60
+}
+fn default_api_rate() -> u32 {
+    120
 }
 
 #[derive(Debug, Deserialize)]

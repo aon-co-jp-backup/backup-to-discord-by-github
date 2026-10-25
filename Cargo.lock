@@ -306,6 +306,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "bdg-server"
+version = "0.1.0"
+dependencies = [
+ "bdg-cli",
+ "bdg-core",
+ "bdg-testkit",
+ "bytes",
+ "chrono",
+ "clap",
+ "hex",
+ "hmac",
+ "hyper",
+ "open-runo-router",
+ "open-runo-security",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "bdg-testkit"
 version = "0.1.0"
 dependencies = [

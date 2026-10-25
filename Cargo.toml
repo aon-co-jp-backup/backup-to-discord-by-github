@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/bdg-core", "crates/bdg-testkit", "crates/bdg-cli"]
+members = ["crates/bdg-core", "crates/bdg-testkit", "crates/bdg-cli", "crates/bdg-server"]
 
 [workspace.package]
 version = "0.1.0"
