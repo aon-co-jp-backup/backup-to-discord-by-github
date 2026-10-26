@@ -1,17 +1,23 @@
 [Unit]
-Description=bdg-server (admin API + GitHub webhook receiver)
+Description=bdg-server (admin API + GitHub webhook receiver; encrypted GitHub backup to Discord)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 User=bdg
+Group=bdg
+Environment=HOME=/var/lib/bdg
 ExecStart=/usr/local/bin/bdg-server --config /etc/bdg/bdg.toml
 Restart=on-failure
 RestartSec=10
+# 他のサイトを巻き込まないよう資源を絞る
+MemoryMax=1500M
+Nice=10
 ProtectSystem=strict
 ReadWritePaths=/var/lib/bdg
 PrivateTmp=true
 NoNewPrivileges=true
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target

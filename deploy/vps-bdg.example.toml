@@ -1,0 +1,29 @@
+# VPS用。秘密は /etc/bdg/secrets/ の別ファイル(bdg専用ユーザーだけが読める)。
+[discord]
+channel_id = "1563856430640144436"
+token_file = '/etc/bdg/secrets/discord-bot-token.txt'
+max_upload_mib = 8
+
+[crypto]
+passphrase_file = '/etc/bdg/secrets/bdg-passphrase.txt'
+kdf_memory_mib = 64
+
+[github]
+token_file = '/etc/bdg/secrets/github-readonly-token.txt'
+include_user = true
+only_private = true
+include_forks = false
+
+[schedule]
+keep = 3
+pause_secs = 5
+state_file = '/var/lib/bdg/bdg-state.json'
+
+[server]
+listen = "127.0.0.1:8127"
+admin_token_file = '/etc/bdg/secrets/bdg-admin-token.txt'
+webhook_secret_file = '/etc/bdg/secrets/bdg-webhook-secret.txt'
+webhook_delay_secs = 60
+# 定期実行はWindowsのタスクが担当(二重に走らせない)。VPSはWebhook受信と管理APIだけ。
+run_schedule = false
+api_rate_per_min = 120

@@ -3,3 +3,4 @@ target/
 .env
 bdg.toml
 bdg-state.json
+bin/

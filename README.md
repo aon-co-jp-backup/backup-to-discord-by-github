@@ -20,7 +20,10 @@ Discord をファイル保存先として使うことは利用規約上のリス
 - `crates/bdg-cli`(コマンド `bdg`): `doctor` `backup` `list` `restore` `prune` `run`。定期実行は `bdg run --once` をOSのスケジューラから呼ぶ(`deploy/` に systemd timer と Windows タスクの雛形)か、`bdg run` を常駐させる。前回から参照が変わらないリポジトリは送らない。1リポジトリの失敗で全体を止めない。
 - 試験: ユニット + RPoem 製モック Discord/GitHub と本物の git を相手にした通し試験(計 31 件)。**本物の Discord での実機確認(2026-10-26)**: `bdg doctor` が全項目 OK、公開リポジトリ1つ(約100KB)を実バックアップ→`list`→`restore`→`git clone` で中身まで一致を確認。大きなリポジトリ(複数パート)・非公開リポジトリ・`bdg-server` の実環境は未確認。手順は下の「実Discord試験」。
 - `crates/bdg-server`(コマンド `bdg-server`、RPoem): 管理API(Bearerトークン・レート制限・本文上限)と GitHub Webhook 受信(HMAC署名検証・配送ID重複拒否・対象外リポジトリは無視・連続pushは1回にまとめる)。ジョブは1つずつ実行。RPoem に追加した `webhook` / `body_limit` / `multipart_stream` の実利用。
-- 未実装: `easy-web.tokyo` への配置(nginx/systemd の雛形は `deploy/`)、実環境での試験。
+- **配置済み(2026-10-26)**: VPS の `easy-web.tokyo/backup-to-discord-by-github`(管理API・Webhook)。`bdg-server` は専用ユーザー `bdg` で systemd 稼働(`127.0.0.1:8127`、前面は open-web-server、設定 `deploy/open-web-server/`)。秘密は `/etc/bdg/secrets/`(600)。GitHub Webhook は非公開 9 リポジトリに登録済みで、ping・push の受信と実行まで確認。VPS は Webhook 受信と管理APIのみ(`run_schedule = false`)。
+- **定期実行**: Windows のタスク `bdg-backup-to-discord`(毎日 03:30、`bdg run --once`、`deploy/windows/register-task.ps1`)。VPS と PC は別々の状態ファイルを持つので、VPS が Webhook で取った分は PC の次回実行でもう一度送られうる(世代整理で最新3つに収まる)。
+- **`open-gitea` の調査結果**: Gitea の Rust+RPoem 版で、git smart HTTP・OTPログイン・アクセス制御・Wiki・WASM UI を持つ。**Webhook(送信)・Issue・PR は未実装**で、流用できるコードは無い。bdg は GitHub を保存元にするため forge は不要。将来 open-gitea を保存元にするなら、`GitSource` の URL に open-gitea のクローン URL を渡すだけで動く見込み(未検証)。
+- 未了: 公開 135 リポジトリ(約 2.8GB)を Discord に入れるか(`open-github-backup` が別にミラー済み・規約リスクが増すため保留)、パスフレーズの強化(下記)。
 
 ## 使う前に(利用者が行うこと)
 Discord の非公開サーバー・Bot の作成、チャンネルへの権限付与(メッセージ送信・ファイル添付・履歴閲覧。メッセージの管理は不要)、Bot トークンと暗号化パスフレーズの用意。いずれも `F:` 直下の txt などに置き、リポジトリへは入れない。
@@ -50,3 +53,7 @@ Discord の非公開サーバー・Bot の作成、チャンネルへの権限�
 
 GitHub側は、各リポジトリ(または組織)の Webhook に `https://easy-web.tokyo/backup-to-discord-by-github/webhook/github`、Content type `application/json`、Secret に `webhook_secret_file` と同じ値、イベントは `push` だけ、を設定する。
 復元(リポジトリの中身を返す操作)は、情報漏えいの面積を増やさないため HTTP には出していない。CLI の `bdg restore` のみ。
+
+## パスフレーズについて
+`F:\bdg-passphrase.txt` は暗号の鍵の元です。**短いと総当たりに弱く、失うと復元できません**。長い(20文字以上のランダム)ものを推奨します。
+変更すると既存のバックアップは古いパスフレーズでしか読めないため、変えるときは新しいパスフレーズで取り直してから古い世代を `prune` してください。

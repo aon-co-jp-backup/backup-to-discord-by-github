@@ -1,0 +1,10 @@
+# easy-web.tokyo の前面は nginx ではなく open-web-server(/root/open-web-server/domains.toml)。
+# 末尾に追記して、open-web-server を再起動する(再読み込みはされない。再起動中は全サイトが数秒止まる)。
+# 先に domains.toml のバックアップを取ること。
+[[domain]]
+host = "easy-web.tokyo"
+backend = "open_runo"
+backend_addr = "127.0.0.1:8127"
+db_uri = "n/a"
+path_prefix = "/backup-to-discord-by-github"
+strip_prefix = true
