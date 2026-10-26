@@ -18,7 +18,7 @@ Discord をファイル保存先として使うことは利用規約上のリス
 ## 状況
 - `crates/bdg-core`: 暗号化(XChaCha20-Poly1305、パートごと独立・AADにID/連番/最終フラグ)、Argon2id、分割、`git bundle` のストリーミング作成、Discord REST(429/5xx再試行・失敗時の掃除)、復元(SHA-256・連番・最終パート・合計サイズ検証)、世代整理(`prune`)、GitHub一覧(公開・非公開)、変更検知(`git ls-remote` の指紋)。
 - `crates/bdg-cli`(コマンド `bdg`): `doctor` `backup` `list` `restore` `prune` `run`。定期実行は `bdg run --once` をOSのスケジューラから呼ぶ(`deploy/` に systemd timer と Windows タスクの雛形)か、`bdg run` を常駐させる。前回から参照が変わらないリポジトリは送らない。1リポジトリの失敗で全体を止めない。
-- 試験: ユニット + RPoem 製モック Discord/GitHub と本物の git を相手にした通し試験(計 31 件)。**本物の Discord での実機試験は未実施**: 手順は下の「実Discord試験」。
+- 試験: ユニット + RPoem 製モック Discord/GitHub と本物の git を相手にした通し試験(計 31 件)。**本物の Discord での実機確認(2026-10-26)**: `bdg doctor` が全項目 OK、公開リポジトリ1つ(約100KB)を実バックアップ→`list`→`restore`→`git clone` で中身まで一致を確認。大きなリポジトリ(複数パート)・非公開リポジトリ・`bdg-server` の実環境は未確認。手順は下の「実Discord試験」。
 - `crates/bdg-server`(コマンド `bdg-server`、RPoem): 管理API(Bearerトークン・レート制限・本文上限)と GitHub Webhook 受信(HMAC署名検証・配送ID重複拒否・対象外リポジトリは無視・連続pushは1回にまとめる)。ジョブは1つずつ実行。RPoem に追加した `webhook` / `body_limit` / `multipart_stream` の実利用。
 - 未実装: `easy-web.tokyo` への配置(nginx/systemd の雛形は `deploy/`)、実環境での試験。
 
