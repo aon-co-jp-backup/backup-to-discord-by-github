@@ -318,6 +318,7 @@ dependencies = [
  "hex",
  "hmac",
  "hyper",
+ "open-runo-openapi",
  "open-runo-router",
  "open-runo-security",
  "reqwest 0.12.28",
@@ -1921,6 +1922,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "open-runo-openapi"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde_json",
+]
+
+[[package]]
 name = "open-runo-persisted-queries"
 version = "0.1.0"
 dependencies = [
@@ -1960,6 +1969,7 @@ dependencies = [
  "open-runo-federation",
  "open-runo-history",
  "open-runo-observability",
+ "open-runo-openapi",
  "open-runo-persisted-queries",
  "open-runo-schema-registry",
  "open-runo-scim",

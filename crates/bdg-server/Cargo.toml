@@ -19,6 +19,7 @@ bdg-core = { path = "../bdg-core" }
 bdg-cli = { path = "../bdg-cli" }
 open-runo-router = { path = "../../../RPoem/crates/open-runo-router" }
 open-runo-security = { path = "../../../RPoem/crates/open-runo-security" }
+open-runo-openapi = { path = "../../../RPoem/crates/open-runo-openapi" }
 hyper = "1"
 bytes = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }

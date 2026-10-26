@@ -291,6 +291,9 @@ pub fn build(ctx: Arc<Ctx>, settings: Settings) -> (Router, Arc<App>) {
         });
         router = router.route(Method::POST, "/webhook/github", hook);
     }
+    // 型駆動のAPIドキュメント(OpenAPI/Swagger UI/ReDoc/Cosmo互換SDL/Tauriマニフェスト、2026-10-26、
+    // RPoemのopen-runo-openapi)。
+    let router = open_runo_router::openapi::mount_docs(router, "/api", api_spec(settings.webhook_secret.is_some()));
     (router, app)
 }
 
@@ -390,4 +393,22 @@ pub fn spawn_background(app: &Arc<App>) -> Vec<tokio::task::JoinHandle<()>> {
         }));
     }
     handles
+}
+
+/// このサーバーのAPI宣言。`/api/openapi.json` ほかの元になる。
+fn api_spec(with_webhook: bool) -> open_runo_openapi::Spec {
+    use open_runo_openapi::{Operation as Op, Spec};
+    let mut spec = Spec::new("backup-to-discord-by-github", env!("CARGO_PKG_VERSION"))
+        .description("GitHub→暗号化→非公開Discordのバックアップ制御API")
+        .op(Op::get("/healthz").summary("Health check").tag("system").public().response_empty(200, "OK"))
+        .op(Op::get("/api/jobs").id("listJobs").summary("List backup jobs").tag("jobs").response_empty(200, "Jobs"))
+        .op(Op::get("/api/jobs/:id").id("getJob").summary("Get one backup job").tag("jobs").response_empty(200, "Job").response_empty(404, "Not found"))
+        .op(Op::get("/api/targets").id("listTargets").summary("List backup targets").tag("targets").response_empty(200, "Targets"))
+        .op(Op::get("/api/backups").id("listBackups").summary("List stored backups").tag("backups").response_empty(200, "Backups"))
+        .op(Op::post("/api/backup").id("startBackup").summary("Start a backup").tag("backups").response_empty(200, "Started"))
+        .op(Op::post("/api/prune").id("startPrune").summary("Start pruning old backups").tag("backups").response_empty(200, "Started"));
+    if with_webhook {
+        spec = spec.op(Op::post("/webhook/github").id("githubWebhook").summary("GitHub webhook (HMAC-verified)").tag("webhook").public().body_raw("application/json").response_empty(200, "Accepted"));
+    }
+    spec
 }
