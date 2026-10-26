@@ -169,3 +169,17 @@ async fn doctor_reports_a_helpful_hint_for_bad_token() {
     assert!(!send.1);
     assert!(send.2.contains("Botトークン"), "{}", send.2);
 }
+
+#[tokio::test]
+async fn only_private_skips_public_repositories() {
+    let a = tempfile::tempdir().unwrap();
+    make_repo(a.path());
+    let url = a.path().display().to_string();
+    let e = env("include_user = true\nonly_private = true", "").await;
+    e.state.lock().unwrap().repos = vec![
+        serde_json::json!({"full_name":"o/priv","clone_url":url,"private":true}),
+        serde_json::json!({"full_name":"o/pub","clone_url":url,"private":false}),
+    ];
+    let targets = resolve_targets(&e.ctx).await.unwrap();
+    assert_eq!(targets.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["o/priv"]);
+}

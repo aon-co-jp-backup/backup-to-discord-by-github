@@ -93,7 +93,7 @@ pub async fn resolve_targets(ctx: &Ctx) -> Result<Vec<Target>, String> {
         let token = ctx.gh_token.as_deref().ok_or("github token is required to list repositories")?;
         let repos = list_repos(&api, token, &owner).await.map_err(|e| e.to_string())?;
         for r in repos {
-            if (r.fork && !g.include_forks) || (r.archived && !g.include_archived) {
+            if (r.fork && !g.include_forks) || (r.archived && !g.include_archived) || (g.only_private && !r.private) {
                 continue;
             }
             push(Target { name: r.full_name, url: r.clone_url });

@@ -110,6 +110,9 @@ pub struct GithubCfg {
     pub include_forks: bool,
     #[serde(default = "yes")]
     pub include_archived: bool,
+    /// 非公開リポジトリだけを対象にする(公開は別のミラーが取っている場合など)。
+    #[serde(default)]
+    pub only_private: bool,
     /// 追加で明示するリポジトリ(`owner/name` またはcloneのURL)。
     #[serde(default)]
     pub repos: Vec<String>,

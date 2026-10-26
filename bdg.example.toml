@@ -13,8 +13,9 @@ kdf_memory_mib = 64
 
 [github]
 token_file = 'F:/github-token.txt'         # 非公開リポジトリの取得と一覧に使うPAT
-orgs = ["aon-co-jp"]                       # 組織の全リポジトリ(公開・非公開)
-include_user = false                       # トークンの持ち主自身のリポジトリも
+orgs = []                                 # 組織の全リポジトリ。aon-co-jp は「ユーザー」アカウントなので下の include_user を使う
+include_user = true                        # トークンの持ち主自身のリポジトリ(非公開を含む)。aon-co-jp はこれ
+only_private = false                       # true なら非公開だけ(公開は open-github-backup が別に取っている場合)
 include_forks = false
 include_archived = true
 repos = []                                 # 追加で明示する場合: "owner/name"
