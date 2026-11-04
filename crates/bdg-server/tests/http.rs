@@ -4,7 +4,7 @@ use bdg_cli::config::Config;
 use bdg_cli::runner::Ctx;
 use bdg_server::{build, spawn_background, Settings};
 use bdg_testkit::{Shared, State};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use open_runo_router::hyper_compat::serve;
 use serde_json::{json, Value};
 use sha2::Sha256;

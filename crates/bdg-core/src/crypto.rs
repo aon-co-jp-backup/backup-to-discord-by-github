@@ -10,7 +10,8 @@ use crate::{Error, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use rand::RngCore;
+use rand::rngs::SysRng;
+use rand::TryRng;
 
 pub const PART_MAGIC: &[u8; 4] = b"BDG1";
 pub const MANIFEST_MAGIC: &[u8; 4] = b"BDGM";
@@ -92,7 +93,7 @@ impl Key {
 
 pub fn random_bytes<const N: usize>() -> [u8; N] {
     let mut b = [0u8; N];
-    rand::rngs::OsRng.fill_bytes(&mut b);
+    SysRng.try_fill_bytes(&mut b).expect("OS random number generator failed");
     b
 }
 
@@ -111,7 +112,7 @@ pub fn encrypt_part(key: &Key, backup_id: &[u8; 16], index: u32, last: bool, pla
     let aad = part_aad(backup_id, index, last);
     let ct = key
         .cipher()
-        .encrypt(XNonce::from_slice(&nonce_bytes), Payload { msg: plain, aad: &aad })
+        .encrypt(&XNonce::from(nonce_bytes), Payload { msg: plain, aad: &aad })
         .map_err(|_| Error::Decrypt("encryption failed"))?;
     let mut out = Vec::with_capacity(4 + NONCE_LEN + ct.len());
     out.extend_from_slice(PART_MAGIC);
@@ -180,7 +181,7 @@ pub fn encrypt_manifest(key: &Key, header_bytes: &[u8], plain_json: &[u8]) -> Re
     let nonce_bytes: [u8; NONCE_LEN] = random_bytes();
     let ct = key
         .cipher()
-        .encrypt(XNonce::from_slice(&nonce_bytes), Payload { msg: plain_json, aad: header_bytes })
+        .encrypt(&XNonce::from(nonce_bytes), Payload { msg: plain_json, aad: header_bytes })
         .map_err(|_| Error::Decrypt("encryption failed"))?;
     let mut out = Vec::with_capacity(header_bytes.len() + NONCE_LEN + ct.len());
     out.extend_from_slice(header_bytes);
