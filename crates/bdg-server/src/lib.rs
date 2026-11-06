@@ -16,7 +16,7 @@ pub mod queue;
 
 use bdg_cli::runner::{backup_pass, prune_pass, resolve_targets, Ctx, Status};
 use open_runo_router::body_limit::{read_body_limited, with_content_length_limit};
-use open_runo_router::hyper_compat::{json_response, query_params, Handler, Params, Request, Response, Router};
+use open_runo_router::hyper_compat::{json_response, Handler, Params, Request, Response, Router};
 use open_runo_router::middleware_hyper::{build_rate_limiter, with_rate_limit_by, RateLimitKeyFn};
 use open_runo_router::webhook::{webhook_handler, VerifiedWebhook, WebhookConfig};
 use open_runo_security::RateLimit;
@@ -63,8 +63,21 @@ fn json(status: StatusCode, v: serde_json::Value) -> Response {
     json_response(status, &v)
 }
 
+/// Connect形式のエラー `{"code","message"}`(HTTPステータスはConnect仕様の対応表)。
 fn err(status: StatusCode, msg: &str) -> Response {
-    json(status, serde_json::json!({ "error": msg }))
+    let code = match status.as_u16() {
+        400 => "invalid_argument",
+        401 => "unauthenticated",
+        403 => "permission_denied",
+        404 => "not_found",
+        409 => "aborted",
+        429 => "resource_exhausted",
+        501 => "unimplemented",
+        502 | 503 => "unavailable",
+        504 => "deadline_exceeded",
+        _ => "internal",
+    };
+    json(status, serde_json::json!({ "code": code, "message": msg }))
 }
 
 impl App {
@@ -156,6 +169,18 @@ struct BackupBody {
 
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
+struct JobsBody {
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct JobBody {
+    id: u64,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct PruneBody {
     keep: Option<usize>,
     #[serde(default)]
@@ -168,7 +193,10 @@ async fn read_optional_json<T: for<'de> Deserialize<'de> + Default>(req: Request
     if bytes.iter().all(|b| b.is_ascii_whitespace()) {
         return Ok(T::default());
     }
-    serde_json::from_slice(&bytes).map_err(|_| err(StatusCode::BAD_REQUEST, "invalid JSON body"))
+    // RS-JSON: サイズ・深さ・重複キーの上限つきで読む(REST全廃方針)。
+    let text = std::str::from_utf8(&bytes).map_err(|_| err(StatusCode::BAD_REQUEST, "invalid JSON body"))?;
+    rust_json::from_str_secure(text, &rust_json::Limits { max_bytes: API_BODY_LIMIT, ..Default::default() })
+        .map_err(|_| err(StatusCode::BAD_REQUEST, "invalid JSON body"))
 }
 
 pub fn build(ctx: Arc<Ctx>, settings: Settings) -> (Router, Arc<App>) {
@@ -198,12 +226,21 @@ pub fn build(ctx: Arc<Ctx>, settings: Settings) -> (Router, Arc<App>) {
     });
 
     let jobs = handler(&app, |app, req, _p| async move {
-        let limit = query_params(&req).get("limit").and_then(|l| l.parse::<usize>().ok()).unwrap_or(50).clamp(1, 200);
+        let body: JobsBody = match read_optional_json(req).await {
+            Ok(b) => b,
+            Err(r) => return r,
+        };
+        let limit = body.limit.unwrap_or(50).clamp(1, 200);
         json(StatusCode::OK, serde_json::json!({ "jobs": app.queue.list(limit) }))
     });
 
-    let job = handler(&app, |app, _req, p| async move {
-        match p.get("id").and_then(|i| i.parse::<u64>().ok()).and_then(|id| app.queue.get(id)) {
+    let job = handler(&app, |app, req, _p| async move {
+        let body: JobBody = match read_optional_json::<Option<JobBody>>(req).await {
+            Ok(Some(b)) => b,
+            Ok(None) => return err(StatusCode::BAD_REQUEST, "id is required"),
+            Err(r) => return r,
+        };
+        match app.queue.get(body.id) {
             Some(j) => json(StatusCode::OK, serde_json::to_value(j).unwrap_or_default()),
             None => err(StatusCode::NOT_FOUND, "no such job"),
         }
@@ -272,14 +309,22 @@ pub fn build(ctx: Arc<Ctx>, settings: Settings) -> (Router, Arc<App>) {
         json(StatusCode::OK, serde_json::json!({ "backups": items, "unreadable": unreadable }))
     });
 
+    // 管理操作は Connect の単純呼び出し: `POST /bdg.admin.v1.Admin/<Method>`(本文はJSON)。
+    let dispatch: Handler = Arc::new(move |req, params| {
+        let h = match params.get("method") {
+            Some("ListJobs") => Arc::clone(&jobs),
+            Some("GetJob") => Arc::clone(&job),
+            Some("ListTargets") => Arc::clone(&targets),
+            Some("ListBackups") => Arc::clone(&backups),
+            Some("StartBackup") => Arc::clone(&start_backup),
+            Some("StartPrune") => Arc::clone(&start_prune),
+            _ => return Box::pin(async { err(StatusCode::NOT_IMPLEMENTED, "unknown method") }),
+        };
+        h(req, params)
+    });
     let mut router = Router::new()
         .route(Method::GET, "/healthz", health)
-        .route(Method::GET, "/api/jobs", api(jobs))
-        .route(Method::GET, "/api/jobs/:id", api(job))
-        .route(Method::GET, "/api/targets", api(targets))
-        .route(Method::GET, "/api/backups", api(backups))
-        .route(Method::POST, "/api/backup", api(start_backup))
-        .route(Method::POST, "/api/prune", api(start_prune));
+        .route(Method::POST, "/bdg.admin.v1.Admin/:method", api(dispatch));
 
     if let Some(secret) = &settings.webhook_secret {
         let a = Arc::clone(&app);
@@ -291,9 +336,7 @@ pub fn build(ctx: Arc<Ctx>, settings: Settings) -> (Router, Arc<App>) {
         });
         router = router.route(Method::POST, "/webhook/github", hook);
     }
-    // 型駆動のAPIドキュメント(OpenAPI/Swagger UI/ReDoc/Cosmo互換SDL/Tauriマニフェスト、2026-10-26、
-    // RPoemのopen-runo-openapi)。
-    let router = open_runo_router::openapi::mount_docs(router, "/api", api_spec(settings.webhook_secret.is_some()));
+    let router = router;
     (router, app)
 }
 
@@ -393,22 +436,4 @@ pub fn spawn_background(app: &Arc<App>) -> Vec<tokio::task::JoinHandle<()>> {
         }));
     }
     handles
-}
-
-/// このサーバーのAPI宣言。`/api/openapi.json` ほかの元になる。
-fn api_spec(with_webhook: bool) -> open_runo_openapi::Spec {
-    use open_runo_openapi::{Operation as Op, Spec};
-    let mut spec = Spec::new("backup-to-discord-by-github", env!("CARGO_PKG_VERSION"))
-        .description("GitHub→暗号化→非公開Discordのバックアップ制御API")
-        .op(Op::get("/healthz").summary("Health check").tag("system").public().response_empty(200, "OK"))
-        .op(Op::get("/api/jobs").id("listJobs").summary("List backup jobs").tag("jobs").response_empty(200, "Jobs"))
-        .op(Op::get("/api/jobs/:id").id("getJob").summary("Get one backup job").tag("jobs").response_empty(200, "Job").response_empty(404, "Not found"))
-        .op(Op::get("/api/targets").id("listTargets").summary("List backup targets").tag("targets").response_empty(200, "Targets"))
-        .op(Op::get("/api/backups").id("listBackups").summary("List stored backups").tag("backups").response_empty(200, "Backups"))
-        .op(Op::post("/api/backup").id("startBackup").summary("Start a backup").tag("backups").response_empty(200, "Started"))
-        .op(Op::post("/api/prune").id("startPrune").summary("Start pruning old backups").tag("backups").response_empty(200, "Started"));
-    if with_webhook {
-        spec = spec.op(Op::post("/webhook/github").id("githubWebhook").summary("GitHub webhook (HMAC-verified)").tag("webhook").public().body_raw("application/json").response_empty(200, "Accepted"));
-    }
-    spec
 }

@@ -97,7 +97,7 @@ impl Env {
     }
     async fn wait_job(&self, id: u64) -> Value {
         for _ in 0..200 {
-            let j: Value = self.get(&format!("/api/jobs/{id}")).send().await.unwrap().json().await.unwrap();
+            let j: Value = self.post(&format!("/bdg.admin.v1.Admin/GetJob")).json(&json!({"id": id})).send().await.unwrap().json().await.unwrap();
             if matches!(j["status"].as_str(), Some("succeeded") | Some("failed")) {
                 return j;
             }
@@ -133,14 +133,14 @@ async fn admin_api_requires_the_token() {
     // 認証不要なのはヘルスチェックだけ。
     assert_eq!(e.http.get(format!("{}/healthz", e.base)).send().await.unwrap().status(), 200);
     for req in [
-        e.http.get(format!("{}/api/jobs", e.base)),
-        e.http.get(format!("{}/api/jobs", e.base)).bearer_auth("wrong-token-wrong-token-123456"),
-        e.http.get(format!("{}/api/jobs", e.base)).header("authorization", "Basic abc"),
-        e.http.post(format!("{}/api/backup", e.base)),
+        e.http.post(format!("{}/bdg.admin.v1.Admin/ListJobs", e.base)),
+        e.http.post(format!("{}/bdg.admin.v1.Admin/ListJobs", e.base)).bearer_auth("wrong-token-wrong-token-123456"),
+        e.http.post(format!("{}/bdg.admin.v1.Admin/ListJobs", e.base)).header("authorization", "Basic abc"),
+        e.http.post(format!("{}/bdg.admin.v1.Admin/StartBackup", e.base)),
     ] {
         assert_eq!(req.send().await.unwrap().status(), 401);
     }
-    assert_eq!(e.get("/api/jobs").send().await.unwrap().status(), 200);
+    assert_eq!(e.post("/bdg.admin.v1.Admin/ListJobs").send().await.unwrap().status(), 200);
     // Webhookを無効にした場合は、ルート自体が無い。
     let r = e.http.post(format!("{}/webhook/github", e.base)).send().await.unwrap();
     assert_eq!(r.status(), 404);
@@ -149,43 +149,43 @@ async fn admin_api_requires_the_token() {
 #[tokio::test]
 async fn manual_backup_runs_and_shows_up_in_the_listing() {
     let e = start(false, 1000).await;
-    let t: Value = e.get("/api/targets").send().await.unwrap().json().await.unwrap();
+    let t: Value = e.post("/bdg.admin.v1.Admin/ListTargets").send().await.unwrap().json().await.unwrap();
     assert_eq!(t["targets"][0], e.repo_name.as_str());
 
     // 対象外・不正な指定は拒否。
-    let r = e.post("/api/backup").json(&json!({"repo": "x/not-a-target"})).send().await.unwrap();
+    let r = e.post("/bdg.admin.v1.Admin/StartBackup").json(&json!({"repo": "x/not-a-target"})).send().await.unwrap();
     assert_eq!(r.status(), 404);
-    let r = e.post("/api/backup").json(&json!({"bogus": 1})).send().await.unwrap();
+    let r = e.post("/bdg.admin.v1.Admin/StartBackup").json(&json!({"bogus": 1})).send().await.unwrap();
     assert_eq!(r.status(), 400);
-    let r = e.post("/api/backup").body("{not json").send().await.unwrap();
+    let r = e.post("/bdg.admin.v1.Admin/StartBackup").body("{not json").send().await.unwrap();
     assert_eq!(r.status(), 400);
 
     // 大文字小文字違いのリポジトリ名も受け付ける(GitHubの名前は大小を区別しない)。
-    let r = e.post("/api/backup").json(&json!({"repo": e.repo_name.to_uppercase()})).send().await.unwrap();
+    let r = e.post("/bdg.admin.v1.Admin/StartBackup").json(&json!({"repo": e.repo_name.to_uppercase()})).send().await.unwrap();
     assert_eq!(r.status(), 202);
     let id = r.json::<Value>().await.unwrap()["job_id"].as_u64().unwrap();
     assert_eq!(e.wait_job(id).await["status"], "succeeded");
 
     // 変更が無くても送らせる(force)。
-    let r = e.post("/api/backup").json(&json!({"repo": e.repo_name, "force": true})).send().await.unwrap();
+    let r = e.post("/bdg.admin.v1.Admin/StartBackup").json(&json!({"repo": e.repo_name, "force": true})).send().await.unwrap();
     assert_eq!(r.status(), 202);
     let id = r.json::<Value>().await.unwrap()["job_id"].as_u64().unwrap();
     let job = e.wait_job(id).await;
     assert_eq!(job["status"], "succeeded", "{job}");
     assert!(job["messages"][0].as_str().unwrap().contains("backed up"));
 
-    let list: Value = e.get("/api/backups").send().await.unwrap().json().await.unwrap();
+    let list: Value = e.post("/bdg.admin.v1.Admin/ListBackups").send().await.unwrap().json().await.unwrap();
     assert_eq!(list["backups"][0]["repo"], e.repo_name.as_str());
     assert_eq!(list["unreadable"], 0);
     assert!(!e.mock.lock().unwrap().msgs.is_empty());
 
     // 世代整理(dry run)はジョブとして実行され、何も消さない。
     let before = e.mock.lock().unwrap().msgs.len();
-    let r = e.post("/api/prune").json(&json!({"dry_run": true})).send().await.unwrap();
+    let r = e.post("/bdg.admin.v1.Admin/StartPrune").json(&json!({"dry_run": true})).send().await.unwrap();
     let id = r.json::<Value>().await.unwrap()["job_id"].as_u64().unwrap();
     assert_eq!(e.wait_job(id).await["status"], "succeeded");
     assert_eq!(e.mock.lock().unwrap().msgs.len(), before);
-    let r = e.post("/api/prune").json(&json!({"keep": 0})).send().await.unwrap();
+    let r = e.post("/bdg.admin.v1.Admin/StartPrune").json(&json!({"keep": 0})).send().await.unwrap();
     assert_eq!(r.status(), 400);
 }
 
@@ -218,7 +218,7 @@ async fn github_webhook_verifies_filters_dedups_and_coalesces() {
     let r = send_hook(&e, "push", "d-other", &json!({"repository": {"full_name": "someone/else"}})).await;
     assert_eq!(r.status(), 202);
     assert_eq!(r.json::<Value>().await.unwrap()["ignored"], "not a backup target");
-    let jobs: Value = e.get("/api/jobs").send().await.unwrap().json().await.unwrap();
+    let jobs: Value = e.post("/bdg.admin.v1.Admin/ListJobs").send().await.unwrap().json().await.unwrap();
     assert!(jobs["jobs"].as_array().unwrap().is_empty());
 
     // 連続push → 1つのジョブにまとまる。
@@ -251,12 +251,33 @@ async fn api_is_rate_limited_and_body_size_is_capped() {
     let e = start(false, 4).await;
     let mut statuses = Vec::new();
     for _ in 0..6 {
-        statuses.push(e.get("/api/jobs").send().await.unwrap().status().as_u16());
+        statuses.push(e.post("/bdg.admin.v1.Admin/ListJobs").send().await.unwrap().status().as_u16());
     }
     assert!(statuses[..4].iter().all(|s| *s == 200), "{statuses:?}");
     assert!(statuses[4..].iter().all(|s| *s == 429), "{statuses:?}");
 
     let e = start(false, 1000).await;
-    let r = e.post("/api/backup").body(vec![b' '; 20 * 1024]).send().await.unwrap();
+    let r = e.post("/bdg.admin.v1.Admin/StartBackup").body(vec![b' '; 20 * 1024]).send().await.unwrap();
     assert_eq!(r.status(), 413);
+}
+
+#[tokio::test]
+async fn old_rest_routes_are_gone_and_json_is_strict() {
+    let e = start(false, 1000).await;
+    // 旧RESTの経路は404。
+    for path in ["/api/jobs", "/api/targets", "/api/backups", "/api/openapi.json"] {
+        assert_eq!(e.get(path).send().await.unwrap().status(), 404, "{path}");
+    }
+    // 重複キーは400(RS-JSONの上限つき読み込み)。エラーはConnect形式。
+    let r = e
+        .post("/bdg.admin.v1.Admin/StartPrune")
+        .header("content-type", "application/json")
+        .body(r#"{"keep":1,"keep":2}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 400);
+    assert_eq!(r.json::<Value>().await.unwrap()["code"], "invalid_argument");
+    // 未知のメソッド=501。
+    assert_eq!(e.post("/bdg.admin.v1.Admin/Nope").send().await.unwrap().status(), 501);
 }

@@ -41,15 +41,18 @@ Discord の非公開サーバー・Bot の作成、チャンネルへの権限�
 ## bdg-server(管理API / Webhook)
 `bdg-server --config bdg.toml` で起動(`bdg.toml` の `[server]` が必要。既定は `127.0.0.1:8787`、TLSなし)。
 
+管理操作は **Connect の単純呼び出し**(`POST /bdg.admin.v1.Admin/<Method>`、`content-type: application/json`、本文は RS-JSON の上限つき読み込み)。旧 `/api/*` の REST は 2026-11-07 に全廃(404)。エラーは `{"code","message"}`。
+
 | メソッド/パス | 認証 | 内容 |
 |---|---|---|
-| `GET /healthz` | なし | 待ち/実行中のジョブ数 |
-| `GET /api/jobs`, `/api/jobs/:id` | Bearer | ジョブ一覧/詳細 |
-| `GET /api/targets` | Bearer | バックアップ対象 |
-| `GET /api/backups` | Bearer | Discord上のバックアップ(復号して表示) |
-| `POST /api/backup` | Bearer | `{"repo":"owner/name","force":false}` でジョブ登録(省略で全対象) |
-| `POST /api/prune` | Bearer | `{"keep":3,"dry_run":true}` |
-| `POST /webhook/github` | HMAC署名 | pushイベントで該当リポジトリを(デバウンス後に)バックアップ |
+| `GET /healthz` | なし | 待ち/実行中のジョブ数(ヘルスチェック=例外) |
+| `POST /bdg.admin.v1.Admin/ListJobs` | Bearer | ジョブ一覧 `{"limit":50}`(省略可) |
+| `POST /bdg.admin.v1.Admin/GetJob` | Bearer | ジョブ詳細 `{"id":1}` |
+| `POST /bdg.admin.v1.Admin/ListTargets` | Bearer | バックアップ対象 |
+| `POST /bdg.admin.v1.Admin/ListBackups` | Bearer | Discord上のバックアップ(復号して表示) |
+| `POST /bdg.admin.v1.Admin/StartBackup` | Bearer | `{"repo":"owner/name","force":false}` でジョブ登録(省略で全対象) |
+| `POST /bdg.admin.v1.Admin/StartPrune` | Bearer | `{"keep":3,"dry_run":true}` |
+| `POST /webhook/github` | HMAC署名(第三者Webhook=例外) | pushイベントで該当リポジトリを(デバウンス後に)バックアップ |
 
 GitHub側は、各リポジトリ(または組織)の Webhook に `https://easy-web.tokyo/backup-to-discord-by-github/webhook/github`、Content type `application/json`、Secret に `webhook_secret_file` と同じ値、イベントは `push` だけ、を設定する。
 復元(リポジトリの中身を返す操作)は、情報漏えいの面積を増やさないため HTTP には出していない。CLI の `bdg restore` のみ。
